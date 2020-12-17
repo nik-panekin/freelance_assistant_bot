@@ -117,6 +117,7 @@ def get_html(url: str, params: dict=None, data: dict=None,
                 r = requests.get(url, headers=HEADERS, timeout=TIMEOUT,
                                  params=params)
         except requests.exceptions.RequestException:
+            r = False
             time.sleep(SLEEP_TIME)
         else:
             if delay:
