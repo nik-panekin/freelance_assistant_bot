@@ -46,10 +46,13 @@ async def notify_users_task(bot: Bot):
     while True:
         await asyncio.sleep(NOTIFY_PERIOD)
 
-        if await notify_users(bot):
-            logging.info('Уведомления отправлены.')
-        else:
-            logging.info('Уведомлений к отправке нет.')
+        try:
+            if await notify_users(bot):
+                logging.info('Уведомления отправлены.')
+            else:
+                logging.info('Уведомлений к отправке нет.')
+        except Exception as e:
+            logging.error(e)
 
 # Отправить всем пользователям уведомления о новых проектах
 async def notify_users(bot: Bot) -> bool:
@@ -119,10 +122,13 @@ async def notify_users(bot: Bot) -> bool:
                     if index < len(final_jobs) - 1:
                         msg += '\n\n\n'
 
-                await bot.send_message(user['user_id'], msg,
-                                       parse_mode=ParseMode.HTML,
-                                       disable_web_page_preview=True)
-                result = True
+                try:
+                    await bot.send_message(user['user_id'], msg,
+                                           parse_mode=ParseMode.HTML,
+                                           disable_web_page_preview=True)
+                    result = True
+                except Exception as e:
+                    logging.error(e)
 
             if user['email_active'] and final_jobs:
                 text = ''
