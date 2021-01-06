@@ -1,6 +1,7 @@
 """Модуль, обеспечивающий отправку пользователям уведомлений о новых проектах:
 сообщением в Telegram и (или) в виде e-mail.
 """
+import sys
 import logging
 import asyncio
 import time
@@ -9,6 +10,7 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from html import escape
+from random import randint
 
 from aiogram import Bot
 from aiogram.types import Message, ParseMode
@@ -16,11 +18,13 @@ from aiogram.types import Message, ParseMode
 from emoticons import *
 import fl_parser
 import database
-from config import (NOTIFY_PERIOD, SMTP_PORT, SMTP_SERVER,
+from config import (NOTIFY_PERIOD, SHUTDOWN_PERIOD, SMTP_PORT, SMTP_SERVER,
                     BOT_EMAIL, BOT_PASSWORD)
 
-# Задержка после получения данных от сервера биржи фриланса (секунды)
-REQUEST_DELAY = 1
+# Минимальное и максимальное значение задержки после получения данных от
+# сервера биржи фриланса (секунды). Используется во избежание 'бана'
+REQUEST_DELAY_MIN = 2
+REQUEST_DELAY_MAX = 10
 
 # Максимальное количество новых проектов в одном сообщении
 MAX_JOB_COUNT = 10
@@ -43,6 +47,8 @@ HTML_END = """\
 # Бесконечный цикл: периодически отправлять пользователям уведомления о новых
 # проектах соответственно их настройкам фильтров
 async def notify_users_task(bot: Bot):
+    start_time = time.monotonic()
+
     while True:
         await asyncio.sleep(NOTIFY_PERIOD)
 
@@ -54,15 +60,27 @@ async def notify_users_task(bot: Bot):
         except Exception as e:
             logging.error(e)
 
+        if SHUTDOWN_PERIOD and time.monotonic() - start_time > SHUTDOWN_PERIOD:
+            logging.info('Плановое завершение работы.')
+            sys.exit()
+
 # Отправить всем пользователям уведомления о новых проектах
-async def notify_users(bot: Bot) -> bool:
+async def notify_users(bot: Bot, user_id=None) -> bool:
     """Возвращаемое значение:
     True, если сообщения фактически были кому-то отправлены;
     False, если никаких отправок не было (к обработке ошибок это не относится).
     """
     result = False
 
-    users = database.get_settings_all() or []
+    if user_id:
+        user = database.get_settings(user_id)
+        if user:
+            users = [user]
+        else:
+            users = []
+    else:
+        users = database.get_settings_all() or []
+
     for user in users:
         if not (user['active'] or user['email_active']):
             continue
@@ -108,7 +126,8 @@ async def notify_users(bot: Bot) -> bool:
                     if append:
                         final_jobs.append(job)
 
-                await asyncio.sleep(REQUEST_DELAY)
+                await asyncio.sleep(randint(REQUEST_DELAY_MIN,
+                                            REQUEST_DELAY_MAX))
 
             if user['active'] and final_jobs:
                 msg = ''

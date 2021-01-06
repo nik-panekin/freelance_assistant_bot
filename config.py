@@ -13,7 +13,12 @@ DB_NAME = 'settings.db'
 LOG_NAME = 'bot.log'
 
 # Период проверки обновлений и отправки сообщений (в секундах)
-NOTIFY_PERIOD = 60
+NOTIFY_PERIOD = 60 * 30
+
+# Время работы скрипта, по истечении которого программа завершится (в секундах)
+# Если указать False, то скрипт будет работать неопределённо долго
+# SHUTDOWN_PERIOD = False
+SHUTDOWN_PERIOD = 60 * 60 * 24
 
 # Номер порта SMTP для STARTTLS службы GMail
 SMTP_PORT = 587

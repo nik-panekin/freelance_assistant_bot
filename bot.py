@@ -67,6 +67,13 @@ async def show_root(message: Message, user_id: str,
 async def menu_root(message: Message, state: FSMContext):
     await show_root(message, message.from_user.id, edit_message=False)
 
+# Действие: немедленно прислать уведомления
+@dp.message_handler(Command('update'), state='*')
+async def update(message: Message, state: FSMContext):
+    await message.answer('Запрос принят. Пожалуйста, подождите.')
+    if not await notify_users(bot, user_id=message.from_user.id):
+        await message.answer('Новые уведомления отсутствуют.')
+
 # Действие: активировать отправку сообщений
 @dp.callback_query_handler(text='enable', state=Menu.root)
 async def menu_enable(call: CallbackQuery, state: FSMContext):
