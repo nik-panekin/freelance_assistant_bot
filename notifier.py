@@ -86,7 +86,7 @@ async def notify_users(bot: Bot, user_id=None) -> bool:
             continue
 
         for host in fl_parser.HOSTS:
-            final_jobs = []
+            jobs_complete_list = []
             for query in ['keywords', 'categories']:
                 job_filters = database.get_filters(
                     user_id=user['user_id'], host=host, query=query) or []
@@ -114,68 +114,75 @@ async def notify_users(bot: Bot, user_id=None) -> bool:
                     keywords=job_filters[0]['keywords'],
                     last_job_url=jobs[0]['url'])
 
-                for job in jobs:
-                    if len(final_jobs) >= MAX_JOB_COUNT:
-                        break
+                if len(jobs) > MAX_JOB_COUNT:
+                    jobs = jobs[:MAX_JOB_COUNT]
 
+                i = 0
+                while i <= len(jobs) - 1:
                     append = True
-                    for final_job in final_jobs:
-                        if job['url'] == final_job['url']:
+                    for job in jobs_complete_list:
+                        if job['url'] == jobs[i]['url']:
                             append = False
                             break
                     if append:
-                        final_jobs.append(job)
+                        jobs_complete_list.append(jobs[i])
+                        i += 1
+                    else:
+                        del jobs[i]
 
-                await asyncio.sleep(randint(REQUEST_DELAY_MIN,
-                                            REQUEST_DELAY_MAX))
-
-            if user['active'] and final_jobs:
-                msg = ''
-                for index, job in enumerate(final_jobs):
-                    msg += (f'<b><a href="{job["url"]}">{job["title"]}</a></b>'
+                if user['active'] and jobs:
+                    msg = ''
+                    for index, job in enumerate(jobs):
+                        msg += (
+                            f'<b><a href="{job["url"]}">{job["title"]}</a></b>'
                             + f'\n{EMO_MONEY} <b>{job["price"]}</b>'
                             + f' {EMO_POINT_RIGHT} '
                             + f'<b>{fl_parser.host_to_hashtag(host)}</b>'
                             + f'\n{job["description"]}')
 
-                    if index < len(final_jobs) - 1:
-                        msg += '\n\n\n'
+                        if index < len(jobs) - 1:
+                            msg += '\n\n\n'
 
-                try:
-                    await bot.send_message(user['user_id'], msg,
-                                           parse_mode=ParseMode.HTML,
-                                           disable_web_page_preview=True)
+                    try:
+                        await bot.send_message(user['user_id'], msg,
+                                               parse_mode=ParseMode.HTML,
+                                               disable_web_page_preview=True)
+                        result = True
+                    except Exception as e:
+                        logging.error(e)
+
+                if user['email_active'] and jobs:
+                    text = ''
+                    html = HTML_BEGIN
+
+                    for index, job in enumerate(jobs):
+                        html += (
+                            f'<p>\n<b><a href="{job["url"]}">'
+                            + f'{escape(job["title"])}</a></b>'
+                            + f'<br><b>Бюджет проекта:</b> {job["price"]}<br>'
+                            + f'{escape(job["description"])}\n</p>\n')
+
+                        text += (
+                            f'Заголовок проекта: {job["title"]}\n'
+                            + f'Ссылка на страницу проекта: {job["url"]}\n'
+                            + f'Бюджет: {job["price"]}\n'
+                            + f'Описание:\n{job["description"]}')
+
+                        if index < len(jobs) - 1:
+                            html += ('<p>--- + --- + --- + --- + --- + ---</p>'
+                                     + '\n')
+                            text += '\n\n--- + --- + --- + --- + --- + ---\n\n'
+
+                    html += HTML_END
+
+                    send_email(email_receiver=user['email'],
+                               email_subject=f'Новые проекты от {host}: '
+                                             + f'{jobs[0]["title"]}',
+                               text_content=text, html_content=html)
                     result = True
-                except Exception as e:
-                    logging.error(e)
 
-            if user['email_active'] and final_jobs:
-                text = ''
-                html = HTML_BEGIN
-
-                for index, job in enumerate(final_jobs):
-                    html += (
-                        f'<p>\n<b><a href="{job["url"]}">'
-                        + f'{escape(job["title"])}</a></b>'
-                        + f'<br><b>Бюджет проекта:</b> {job["price"]}<br>'
-                        + f'{escape(job["description"])}\n</p>\n')
-
-                    text += (f'Заголовок проекта: {job["title"]}\n'
-                             + f'Ссылка на страницу проекта: {job["url"]}\n'
-                             + f'Бюджет: {job["price"]}\n'
-                             + f'Описание:\n{job["description"]}')
-
-                    if index < len(final_jobs) - 1:
-                        html += '<p>--- + --- + --- + --- + --- + ---</p>\n'
-                        text += '\n\n--- + --- + --- + --- + --- + ---\n\n'
-
-                html += HTML_END
-
-                send_email(email_receiver=user['email'],
-                           email_subject=f'Новые проекты от {host}: '
-                                         + f'{final_jobs[0]["title"]}',
-                           text_content=text, html_content=html)
-                result = True
+                await asyncio.sleep(randint(REQUEST_DELAY_MIN,
+                                            REQUEST_DELAY_MAX))
 
     return result
 
